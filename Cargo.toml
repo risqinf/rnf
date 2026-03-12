@@ -1,0 +1,31 @@
+[package]
+name = "rnf"
+version = "0.1.0"
+edition = "2021"
+authors = ["risqinf"]
+description = "RNF — High Performance Systems & Automation Language"
+license = "MIT"
+repository = "https://github.com/risqinf/rnf"
+keywords = ["programming-language", "compiler", "llvm", "systems", "automation"]
+categories = ["compilers", "command-line-utilities"]
+readme = "README.md"
+
+[[bin]]
+name = "rnf"
+path = "src/main.rs"
+
+[dependencies]
+clap     = { version = "4", features = ["derive"] }
+colored  = "2"
+anyhow   = "1"
+
+[profile.release]
+opt-level     = 3
+lto           = true
+codegen-units = 1
+strip         = true
+panic         = "abort"
+
+[profile.dev]
+opt-level = 0
+debug     = true
