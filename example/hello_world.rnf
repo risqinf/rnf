@@ -1,0 +1,6 @@
+// This Example output Hello World!
+
+fn main() -> int {
+  print("Hello World!")
+  return 0
+}
