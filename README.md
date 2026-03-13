@@ -5,42 +5,67 @@
 ```
   ██████╗ ███╗   ██╗███████╗
   ██╔══██╗████╗  ██║██╔════╝
-  ██████╔╝██╔██╗ ██║█████╗  
-  ██╔══██╗██║╚██╗██║██╔══╝  
-  ██║  ██║██║ ╚████║██║     
-  ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝     
+  ██████╔╝██╔██╗ ██║█████╗
+  ██╔══██╗██║╚██╗██║██╔══╝
+  ██║  ██║██║ ╚████║██║
+  ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝
 ```
 
 **High Performance · Systems · Automation**
-<!--
-[![CI](https://github.com/risqinf/rnf/actions/workflows/ci.yml/badge.svg)](https://github.com/risqinf/rnf/actions)
--->
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Backend](https://img.shields.io/badge/backend-LLVM-purple)
 
 </div>
 
 ---
 
-RNF is a statically-compiled, high-performance systems programming language designed for backend services, custom tooling, and system automation. It combines the best ideas from multiple languages into a single, focused tool.
+RNF adalah bahasa pemrograman yang dikompilasi secara statis, dirancang untuk backend berkinerja tinggi, sistem kustom, dan otomasi — dengan kekuatan C dan gaya Go.
 
-| Feature | Inspiration |
-|---------|------------|
-| Variable syntax | Shell (no `let` required, just `name = value`) |
-| Concurrency (goroutines, channels) | Go |
-| Hardware/memory access, pointers | C |
-| Function syntax, structs, impl | Rust |
-| System command execution | Bash |
-| Compiler backend | LLVM |
+| Fitur | Terinspirasi dari |
+|-------|------------------|
+| Sintaks variabel | **Shell** — `name = value` |
+| Concurrency | **Go** — goroutines, channels |
+| Hardware & memory | **C** — pointer, raw_mem, asm |
+| Sintaks fungsi & struct | **Rust** — `fn`, `struct`, `impl` |
+| Eksekusi perintah | **Bash** — `exec "cmd"` |
+| Backend kompilasi | **LLVM** |
 
-## Installation
+---
 
-### One-line install
+## Compilation Pipeline
+
+```
+  source.rnf
+      │
+      ├──── rnf --run ────► Interpreter (langsung, tanpa llvm)
+      │
+      └──── rnf --release ─► LLVM IR Codegen
+                                  │
+                                  ▼
+                             llc -O2 (.o)
+                                  │
+                                  ▼
+                        musl-gcc / gcc / clang
+                        -static -s (stripped)
+                                  │
+                                  ▼
+                          release/binary/<name>
+```
+
+📖 **Diagram lengkap:** [docs/architecture.md](docs/architecture.md)
+
+---
+
+## Install
+
+### One-line
 ```sh
 curl -sSL https://raw.githubusercontent.com/risqinf/rnf/main/install.sh | bash
 ```
 
-### Build from source
+### Build dari source
 ```sh
 git clone https://github.com/risqinf/rnf
 cd rnf
@@ -48,272 +73,187 @@ cargo build --release
 sudo cp target/release/rnf /usr/local/bin/
 ```
 
-### Build static musl binary (recommended for servers)
+### Dependensi untuk `--release`
+
+| Distro | Perintah |
+|--------|----------|
+| AlmaLinux / RHEL / Fedora | `sudo dnf install llvm clang glibc-static` |
+| Ubuntu / Debian | `sudo apt install llvm clang musl-tools` |
+| Arch Linux | `sudo pacman -S llvm clang musl` |
+| macOS | `brew install llvm` |
+
+> `rnf --run` (interpreter) bekerja tanpa llvm/clang.
+
+---
+
+## Penggunaan
+
 ```sh
-rustup target add x86_64-unknown-linux-musl
-RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-musl
+rnf --run main.rnf                          # jalankan langsung
+rnf --release main.rnf                      # build → release/binary/main
+rnf --release --path /usr/local/bin main.rnf  # build ke path custom
+
+rnf check  main.rnf    # cek syntax
+rnf tokens main.rnf    # debug token stream
+rnf ast    main.rnf    # debug AST
+rnf ir     main.rnf    # emit LLVM IR
+
+rnf init myproject     # buat project baru
+rnf version            # info versi
 ```
 
-## Usage
+---
 
-```sh
-rnf --run main.rnf                          # Interpret and run directly
-rnf --release main.rnf                      # Build static binary (release/binary/main)
-rnf --release --path /custom/path main.rnf  # Build to custom path
-rnf check main.rnf                          # Syntax check only
-rnf ir main.rnf                             # Emit LLVM IR
-rnf tokens main.rnf                         # Debug: show token stream
-rnf ast main.rnf                            # Debug: show AST
-rnf init myproject                          # Create new project
-```
+## Sintaks
 
-### Build output structure
-
-When `--path` is **not** specified:
-```
-release/
-└── binary/
-    └── myprogram       ← static, stripped binary
-```
-
-When `--path /custom/path` is specified:
-```
-/custom/path/
-└── myprogram
-```
-
-## Language Reference
-
-### Variables (Shell-style)
-
-No type declaration required — just assign:
-
+### Variabel (Shell-style)
 ```rnf
-name    = "Alice"
-count   = 42
-pi      = 3.14159
-active  = true
+name  = "Andi"
+umur  = 25
+pi    = 3.14
+aktif = true
 
-// Typed (optional)
-x: int   = 100
-msg: str = "hello"
+let score: int = 100    // opsional tipe eksplisit
 ```
 
-### Functions (Rust-style syntax)
-
+### Fungsi (Rust-style)
 ```rnf
-fn greet(name: str) -> str {
-    return "Hello, " + name + "!"
-}
-
-fn add(a: int, b: int) -> int {
+fn tambah(a: int, b: int) -> int {
     return a + b
 }
 
-// No return value
 fn log(msg: str) {
     print("[LOG] " + msg)
 }
 ```
 
 ### Control Flow
-
 ```rnf
-// if / else
-if count > 0 {
-    print("positive")
-} else if count == 0 {
-    print("zero")
-} else {
-    print("negative")
+// if / else if / else
+if x > 0 { print("positif") }
+else      { print("negatif") }
+
+// while
+while aktif { i = i + 1 }
+
+// loop range (0..N)
+loop i in 0..100 {
+    if i % 2 == 0 { continue }
+    print(str(i))
 }
 
-// while loop
-while active {
-    count = count - 1
-    if count == 0 { active = false }
-}
-
-// loop … in range  (like Python for)
-loop i in 0..10 {
-    print(i)
-}
-
-// loop over array
-fruits = ["apple", "banana", "mango"]
-loop f in fruits {
-    print(f)
-}
+// loop array
+loop item in ["a", "b", "c"] { print(item) }
 ```
 
-### System Execution (Bash-style)
-
+### Struct & Impl
 ```rnf
-// Execute a system command (fire and forget)
-exec "ls -la"
-exec "mkdir -p /tmp/mydir"
+struct Server { host: str; port: int }
 
-// Capture output
-output = exec("uname -a")
-print(output)
-
-// Compose commands
-dir = "/tmp/data"
-exec("mkdir -p " + dir)
-exec("echo hello > " + dir + "/file.txt")
-```
-
-### Go-style Concurrency
-
-```rnf
-fn worker(id: int) {
-    print("Worker " + str(id) + " running")
-    sleep_ms(100)
-    print("Worker " + str(id) + " done")
-}
-
-fn main() -> int {
-    // Goroutines — spawns threads
-    go worker(1)
-    go worker(2)
-    go worker(3)
-
-    // Channel
-    ch = make_chan<int>()
-    send(ch, 42)
-    val = recv(ch)
-    print("Got: " + str(val))
-
-    sleep_ms(200)  // wait for goroutines
-    return 0
-}
-```
-
-### Structs & Impl (Rust-style)
-
-```rnf
-struct Point {
-    x: int
-    y: int
-}
-
-impl Point {
-    fn new(x: int, y: int) -> Point {
-        return Point { x: x, y: y }
-    }
-
-    fn distance(p: Point) -> float {
-        return p.x * p.x + p.y * p.y
+impl Server {
+    fn addr(s: Server) -> str {
+        return s.host + ":" + str(s.port)
     }
 }
-
-fn main() -> int {
-    p = Point { x: 3, y: 4 }
-    print("x=" + str(p.x) + " y=" + str(p.y))
-    return 0
-}
 ```
 
-### Pointers & Hardware (C-style)
-
+### Otomasi Sistem
 ```rnf
-fn main() -> int {
-    x = 42
-    ptr p = &x       // address-of
-    val  = *p        // dereference
-    *p   = 100       // write through pointer
-
-    // Raw memory access (for hardware registers)
-    // Only meaningful in --release mode
-    gpio_reg = raw_mem(0x40020014)
-
-    // Inline assembly (--release only)
-    asm { "nop" }
-
-    return 0
-}
+exec "mkdir -p /tmp/dir"
+output = trim(exec("uname -a"))
+print("OS: " + output)
 ```
 
-### Built-in Functions
-
-| Function | Description |
-|----------|-------------|
-| `print(args...)` | Print with newline |
-| `exec("cmd")` | Run shell command, return stdout |
-| `exec_silent("cmd")` | Run command, discard output |
-| `len(x)` | Length of array or string |
-| `push(arr, val)` | Append to array |
-| `pop(arr)` | Remove and return last element |
-| `int(x)` | Convert to int |
-| `float(x)` | Convert to float |
-| `str(x)` | Convert to string |
-| `bool(x)` | Convert to bool |
-| `exit(code)` | Exit with code |
-| `sleep_ms(ms)` | Sleep milliseconds |
-| `env_get(key)` | Get env variable |
-| `env_set(key, val)` | Set env variable |
-| `args()` | Get CLI args as array |
-| `read_file(path)` | Read file to string |
-| `write_file(path, data)` | Write string to file |
-| `file_exists(path)` | Check if file exists |
-| `split(s, sep)` | Split string → array |
-| `join(arr, sep)` | Join array → string |
-| `trim(s)` | Strip whitespace |
-| `to_upper(s)` | Uppercase |
-| `to_lower(s)` | Lowercase |
-| `contains(s, sub)` | String contains |
-| `starts_with(s, p)` | String starts with |
-| `ends_with(s, p)` | String ends with |
-| `replace(s, from, to)` | String replace |
-| `format(tmpl, args...)` | String format with `{}` |
-| `send(ch, val)` | Send to channel |
-| `recv(ch)` | Receive from channel |
-| `make_chan<T>()` | Create channel |
-
-## Build System
-
-RNF compiles via the LLVM pipeline:
-
-```
-.rnf source
-    ↓  Lexer
-    ↓  Parser (AST)
-    ↓  LLVM IR codegen
-    ↓  llc  (IR → object)
-    ↓  musl-gcc / clang  (static link, strip)
-    ↓
-static binary (no deps, stripped, musl libc)
+### Concurrency
+```rnf
+ch = make_chan<int>()
+go worker(1)
+send(ch, 42)
+val = recv(ch)
 ```
 
-### Requirements for `--release`
-
-```sh
-# Ubuntu/Debian
-sudo apt install llvm clang musl-tools musl-dev
-
-# Arch Linux
-sudo pacman -S llvm clang musl
-
-# macOS (via Homebrew)
-brew install llvm
+### Hardware & Low-Level
+```rnf
+ptr p = &x          // pointer
+*p = 100            // dereference
+gpio = raw_mem(0x40020014)  // memory-mapped IO
+asm { "nop" }       // inline assembly
 ```
 
-## Examples
+---
 
-See the `examples/` directory:
+## Benchmark
 
-| File | Description |
-|------|-------------|
-| `hello.rnf` | Basic syntax, variables, loops |
-| `system.rnf` | OS automation, exec, file operations |
-| `concurrent.rnf` | Goroutines, channels, parallel work |
-| `hardware.rnf` | Pointers, structs, raw memory, inline ASM |
-| `backend.rnf` | Backend services, request routing, benchmarks |
+```
+rnf --run examples/bench.rnf
+```
 
-## License
+```
+════════════════════════════════════════
+  RNF BENCHMARK SUITE
+════════════════════════════════════════
 
-MIT — see [LICENSE](LICENSE)
+── Loop Arithmetic (1M iterations) ──
+sum(0..1M) = 499999500000
 
-## Author
+── Function Call Overhead (100K calls) ──
+Result: 100000
 
-**risqinf** — [github.com/risqinf](https://github.com/risqinf)
+── Fibonacci Recursive (n=30) ──
+fib(30) = 832040
+
+── Float Arithmetic (1M iterations) ──
+Result: 1.105...
+
+── Array Operations (100K elements) ──
+sum = 4950000
+
+── Fast Power (10K calls) ──
+2^10 = 1024
+
+── System Exec (20 calls) ──
+Exec benchmark done
+════════════════════════════════════════
+```
+
+---
+
+## Contoh
+
+| File | Deskripsi |
+|------|-----------|
+| [`examples/hello.rnf`](examples/hello.rnf) | Hello world, variabel, loop |
+| [`examples/system.rnf`](examples/system.rnf) | Otomasi OS, exec, file |
+| [`examples/backend.rnf`](examples/backend.rnf) | Backend service, routing |
+| [`examples/hardware.rnf`](examples/hardware.rnf) | Pointer, raw memory, ASM |
+| [`examples/concurrent.rnf`](examples/concurrent.rnf) | Goroutines, channels |
+| [`examples/bench.rnf`](examples/bench.rnf) | Suite benchmark lengkap |
+
+---
+
+## Dokumentasi
+
+| Dokumen | Isi |
+|---------|-----|
+| [docs/architecture.md](docs/architecture.md) | Pipeline, diagram Mermaid, type system, ASI, IR, concurrency model |
+| [docs/language-reference.md](docs/language-reference.md) | Referensi bahasa lengkap, idiom, best practices |
+
+---
+
+## Built-in Functions (30+)
+
+`print` · `eprint` · `exec` · `exec_silent` · `exit` · `sleep_ms`
+`str` · `int` · `float` · `bool` · `len` · `push` · `pop`
+`split` · `join` · `trim` · `to_upper` · `to_lower`
+`contains` · `starts_with` · `ends_with` · `replace` · `format`
+`read_file` · `write_file` · `file_exists`
+`args` · `env_get` · `env_set`
+`make_chan` · `send` · `recv`
+
+---
+
+## Lisensi
+
+MIT — lihat [LICENSE](LICENSE)
+
+**Author:** [risqinf](https://github.com/risqinf)
